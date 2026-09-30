@@ -1,0 +1,1221 @@
+<!--
+  ============================================================================
+  DEMO VISUAL — Sistema de Gestão para ONG de Resgate de Animais
+  Arquivo: index.html · Versão 2
+
+  Mudanças desta versão em relação à anterior:
+  - Adotante e fornecedor viraram UM cadastro só de "pessoa", com a opção
+    de marcar um ou mais "cargos" (Adotante, Fornecedor...).
+  - Cadastrar uma pessoa NÃO pede mais animal nenhum. O vínculo com um
+    animal agora é feito de dentro do kanban de Adoções, clicando em
+    "Vincular pessoa" no card do animal.
+  - FIV/FeLV deixou de ser um caso especial: agora é só mais uma doença
+    dentro de um catálogo de "Doenças e deficiências", com status
+    (não testado / negativo / positivo / inconclusivo) igual para
+    qualquer doença cadastrada.
+  - A parte de quantidade em estoque dos produtos foi removida por
+    enquanto.
+  - Telas responsivas para celular e computador.
+
+  Continua sendo um protótipo só de HTML + CSS + JS, sem conexão com
+  banco de dados real — os dados abaixo são fixos/fictícios.
+  ============================================================================
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sistema ONG — Protótipo</title>
+<style>
+  /* ==========================================================================
+     1. TOKENS DE COR (paleta Drácula) e RESET BÁSICO
+     ========================================================================== */
+  :root{
+    --bg:        #282a36;
+    --bg-side:   #21222c;
+    --surface:   #343746;
+    --surface-2: #44475a;
+    --border:    #3f4254;
+    --text:      #f8f8f2;
+    --text-muted:#a9adc1;
+
+    --purple: #bd93f9;
+    --pink:   #ff79c6;
+    --cyan:   #8be9fd;
+    --green:  #50fa7b;
+    --orange: #ffb86c;
+    --yellow: #f1fa8c;
+    --red:    #ff5555;
+
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family: 'Segoe UI', Roboto, Inter, Arial, sans-serif;
+    display:flex;
+  }
+  h1,h2,h3{ font-weight:600; margin:0 0 4px; }
+  p{ margin:0; color:var(--text-muted); }
+  ::selection{ background:var(--purple); color:var(--bg); }
+
+  /* ==========================================================================
+     2. MENU LATERAL
+     ========================================================================== */
+  .sidebar{
+    width:236px; min-width:236px;
+    background:var(--bg-side);
+    padding:22px 14px;
+    display:flex; flex-direction:column; gap:4px;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; padding:0 8px 22px; color:var(--text); }
+  .brand .dot{ width:12px;height:12px;border-radius:50%;background:var(--pink); box-shadow:0 0 0 3px rgba(255,121,198,.2);}
+  .brand span{ font-weight:700; font-size:15px; letter-spacing:.2px; }
+
+  .nav-item{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 12px; border-radius:10px;
+    color:var(--text-muted); cursor:pointer; font-size:14px;
+    transition:.15s ease; border:1px solid transparent;
+  }
+  .nav-item:hover{ background:var(--surface); color:var(--text); }
+  .nav-item.active{ background:var(--surface-2); color:var(--text); border-color:var(--purple); }
+  .nav-item .ic{ font-size:16px; width:20px; text-align:center; }
+
+  /* Botão "hambúrguer", só aparece no celular */
+  .btn-menu-mobile{
+    display:none; position:fixed; top:14px; left:14px; z-index:40;
+    background:var(--surface-2); color:var(--text); border:1px solid var(--border);
+    border-radius:10px; width:40px; height:40px; font-size:18px; cursor:pointer;
+  }
+  .overlay-mobile{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:29; }
+
+  /* ==========================================================================
+     3. ÁREA DE CONTEÚDO
+     ========================================================================== */
+  .content{ flex:1; padding:28px 34px; overflow-y:auto; height:100vh; min-width:0; }
+  .page{ display:none; animation:fade .18s ease; }
+  .page.active{ display:block; }
+  @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+
+  .page-header{ margin-bottom:22px; }
+  .page-header p{ margin-top:4px; font-size:13.5px; }
+  .header-com-acao{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+
+  .badge{
+    display:inline-flex; align-items:center; padding:3px 11px; border-radius:999px;
+    font-size:12px; font-weight:600; white-space:nowrap;
+  }
+  .badge.purple{ background:rgba(189,147,249,.16); color:var(--purple); }
+  .badge.pink{   background:rgba(255,121,198,.16); color:var(--pink); }
+  .badge.cyan{   background:rgba(139,233,253,.16); color:var(--cyan); }
+  .badge.green{  background:rgba(80,250,123,.16);  color:var(--green); }
+  .badge.orange{ background:rgba(255,184,108,.16); color:var(--orange); }
+  .badge.red{    background:rgba(255,85,85,.16);   color:var(--red); }
+  .badge.yellow{ background:rgba(241,250,140,.16); color:var(--yellow); }
+
+  /* ==========================================================================
+     4. PAINEL GERAL
+     ========================================================================== */
+  .stats-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin-bottom:26px; }
+  .stat-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px; }
+  .stat-card .num{ font-size:28px; font-weight:700; margin-top:6px; }
+  .stat-card.purple .num{ color:var(--purple); }
+  .stat-card.pink .num{ color:var(--pink); }
+  .stat-card.cyan .num{ color:var(--cyan); }
+  .stat-card.green .num{ color:var(--green); }
+
+  .section-title{ font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); margin:26px 0 12px; }
+
+  /* Barra de filtros */
+  .filtros-bar{
+    display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 16px; margin-bottom:18px;
+  }
+  .filtro-item{ display:flex; flex-direction:column; gap:6px; min-width:160px; flex:1 1 160px; }
+  .filtro-item label{ font-size:11.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; }
+  .filtro-item select{
+    background:var(--bg); border:1px solid var(--border); color:var(--text);
+    padding:9px 11px; border-radius:var(--radius-sm); font-size:13px; font-family:inherit; width:100%;
+  }
+  .filtro-item select:focus{ outline:none; border-color:var(--cyan); }
+  .btn-limpar{ padding:9px 16px; font-size:12.5px; }
+
+  /* ==========================================================================
+     5. CARTÕES DE ANIMAL
+     ========================================================================== */
+  .animal-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; }
+  .animal-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; cursor:grab; transition:.15s ease; }
+  .animal-card:hover{ border-color:var(--purple); transform:translateY(-2px); }
+  .animal-card .top-row{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; }
+  .avatar{ width:38px; height:38px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:18px; background:var(--surface-2); }
+  .animal-card h3{ font-size:15px; margin-top:8px; }
+  .animal-card .desc{ font-size:12.5px; margin-top:6px; line-height:1.4; }
+  .badge-row{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .link-pessoa-btn{
+    margin-top:10px; width:100%; background:transparent; border:1px dashed var(--border); color:var(--text-muted);
+    padding:6px 8px; border-radius:var(--radius-sm); font-size:11.5px; cursor:pointer;
+  }
+  .link-pessoa-btn:hover{ border-color:var(--cyan); color:var(--cyan); }
+
+  /* ==========================================================================
+     6. KANBAN
+     ========================================================================== */
+  .kanban{ display:grid; grid-auto-flow:column; grid-auto-columns:minmax(250px,1fr); gap:16px; overflow-x:auto; padding-bottom:10px;}
+  .kanban-col{ background:rgba(255,255,255,.02); border:1px solid var(--border); border-radius:var(--radius); padding:12px; min-height:120px; }
+  .kanban-col.drag-over{ border-color:var(--pink); background:rgba(255,121,198,.05); }
+  .kanban-col-header{ display:flex; align-items:center; justify-content:space-between; padding:4px 4px 12px; }
+  .kanban-col-header h3{ font-size:13.5px; }
+  .count-pill{ background:var(--surface-2); color:var(--text-muted); font-size:12px; padding:2px 9px; border-radius:999px; }
+  .kanban-card{ margin-bottom:10px; }
+  .kanban-card:last-child{ margin-bottom:0; }
+
+  /* ==========================================================================
+     7. FORMULÁRIOS
+     ========================================================================== */
+  .form-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px; max-width:760px; }
+  .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+  .field.full{ grid-column:1 / -1; }
+  .field label{ font-size:12.5px; color:var(--text-muted); }
+  .field input, .field select, .field textarea{
+    background:var(--bg); border:1px solid var(--border); color:var(--text);
+    padding:10px 12px; border-radius:var(--radius-sm); font-size:13.5px; font-family:inherit; width:100%;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{ outline:none; border-color:var(--purple); }
+  .upload-box{ border:1.5px dashed var(--border); border-radius:var(--radius-sm); padding:20px; text-align:center; color:var(--text-muted); font-size:13px; cursor:pointer; }
+  .upload-box:hover{ border-color:var(--cyan); color:var(--cyan); }
+  .toggle-row{ display:flex; align-items:center; gap:10px; }
+  .switch{ width:38px; height:20px; border-radius:999px; background:var(--surface-2); position:relative; cursor:pointer; flex-shrink:0; }
+  .switch .dot{ position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:var(--text-muted); transition:.15s; }
+  .switch.on{ background:rgba(80,250,123,.25); }
+  .switch.on .dot{ left:20px; background:var(--green); }
+  .btn{
+    display:inline-flex; align-items:center; gap:8px;
+    background:var(--purple); color:#1e1f29; border:none;
+    padding:11px 20px; border-radius:var(--radius-sm); font-weight:600; font-size:13.5px; cursor:pointer;
+  }
+  .btn:hover{ filter:brightness(1.08); }
+  .btn.ghost{ background:transparent; border:1px solid var(--border); color:var(--text); }
+  .btn.small{ padding:7px 13px; font-size:12.5px; }
+
+  .checkbox-pills{ display:flex; flex-wrap:wrap; gap:8px; }
+  .checkbox-pill{
+    display:flex; align-items:center; gap:7px;
+    border:1px solid var(--border); border-radius:999px; padding:7px 13px; font-size:13px; cursor:pointer;
+    background:var(--bg);
+  }
+  .checkbox-pill input{ accent-color:var(--purple); }
+  .checkbox-pill.marcado{ border-color:var(--purple); background:rgba(189,147,249,.12); color:var(--purple); }
+
+  .dica-campo{ font-size:11.5px; color:var(--text-muted); }
+
+  /* Lista de condições de saúde adicionadas no formulário do animal */
+  .condicao-item{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm);
+    padding:8px 12px; margin-bottom:8px; font-size:13px;
+  }
+  .condicao-item .remover{ cursor:pointer; color:var(--text-muted); font-size:14px; }
+  .condicao-item .remover:hover{ color:var(--red); }
+  .add-condicao-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
+  .add-condicao-row .field{ margin-bottom:0; flex:1 1 150px; }
+
+  /* ==========================================================================
+     8. TABELAS
+     ========================================================================== */
+  .tabela-wrap{ overflow-x:auto; border-radius:var(--radius); }
+  table{ width:100%; border-collapse:collapse; background:var(--surface); min-width:520px; }
+  th,td{ text-align:left; padding:12px 16px; font-size:13.5px; border-bottom:1px solid var(--border); }
+  th{ color:var(--text-muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  tr:last-child td{ border-bottom:none; }
+  tr:hover td{ background:rgba(255,255,255,.02); }
+
+  /* ==========================================================================
+     9. MODAL
+     ========================================================================== */
+  .modal-fundo{ display:none; position:fixed; inset:0; z-index:50; background:rgba(20,21,28,.7); align-items:center; justify-content:center; padding:20px; }
+  .modal-fundo.aberto{ display:flex; }
+  .modal{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px; width:100%; max-width:560px; max-height:90vh; overflow-y:auto; }
+  .modal-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+  .modal-header h2{ font-size:18px; }
+  .modal-fechar{ cursor:pointer; color:var(--text-muted); font-size:16px; padding:4px 8px; border-radius:6px; }
+  .modal-fechar:hover{ background:var(--surface-2); color:var(--red); }
+  .aviso-castracao{ font-size:12.5px; line-height:1.5; padding:11px 14px; border-radius:var(--radius-sm); }
+  .aviso-castracao.pendente{ background:rgba(255,184,108,.12); color:var(--orange); }
+  .aviso-castracao.ok{ background:rgba(80,250,123,.12); color:var(--green); }
+
+  /* ==========================================================================
+     10. RESPONSIVIDADE
+     ========================================================================== */
+  @media (max-width:900px){
+    .sidebar{
+      position:fixed; top:0; left:0; bottom:0; z-index:30;
+      transform:translateX(-100%); transition:transform .2s ease;
+      box-shadow:2px 0 18px rgba(0,0,0,.4);
+    }
+    .sidebar.aberta{ transform:translateX(0); }
+    .overlay-mobile.ativo{ display:block; }
+    .btn-menu-mobile{ display:flex; align-items:center; justify-content:center; }
+    .content{ padding:70px 18px 40px; height:auto; min-height:100vh; }
+    body{ display:block; }
+    .form-grid{ grid-template-columns:1fr; }
+    .stats-grid{ grid-template-columns:repeat(2,1fr); }
+  }
+  @media (max-width:480px){
+    .stats-grid{ grid-template-columns:1fr 1fr; }
+    .modal{ padding:18px; }
+    .filtro-item{ min-width:100%; }
+  }
+</style>
+</head>
+<body>
+
+  <button class="btn-menu-mobile" id="btn-menu-mobile">☰</button>
+  <div class="overlay-mobile" id="overlay-mobile"></div>
+
+  <nav class="sidebar" id="sidebar">
+    <div class="brand"><span class="dot"></span><span>ONG Resgate</span></div>
+    <div class="nav-item active" data-page="dashboard"><span class="ic">◆</span> Painel geral</div>
+    <div class="nav-item" data-page="cadastro"><span class="ic">＋</span> Cadastro de animal</div>
+    <div class="nav-item" data-page="clinico"><span class="ic">▤</span> Controle clínico</div>
+    <div class="nav-item" data-page="adocoes"><span class="ic">♥</span> Adoções</div>
+    <div class="nav-item" data-page="pessoas"><span class="ic">☺</span> Pessoas</div>
+    <div class="nav-item" data-page="produtos"><span class="ic">▦</span> Produtos</div>
+  </nav>
+
+  <main class="content">
+
+    <!-- ======================================================================
+         PÁGINA 1 — PAINEL GERAL
+         ====================================================================== -->
+    <section class="page active" id="page-dashboard">
+      <div class="page-header">
+        <h1>Painel geral</h1>
+        <p>Visão rápida da situação atual da ONG</p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card purple"><p>Animais cadastrados</p><div class="num">42</div></div>
+        <div class="stat-card cyan"><p>Em tratamento</p><div class="num">7</div></div>
+        <div class="stat-card pink"><p>Em processo de adoção</p><div class="num">5</div></div>
+        <div class="stat-card green"><p>Adotados este mês</p><div class="num">3</div></div>
+      </div>
+
+      <div class="section-title">Aguardando adoção</div>
+      <div class="animal-grid" id="dashboard-animals"></div>
+    </section>
+
+    <!-- ======================================================================
+         PÁGINA 2 — CADASTRO DE ANIMAL
+         ====================================================================== -->
+    <section class="page" id="page-cadastro">
+      <div class="page-header">
+        <h1>Cadastro de animal</h1>
+        <p>Preencha as informações do animal resgatado</p>
+      </div>
+
+      <div class="form-card">
+        <div class="upload-box" style="margin-bottom:18px;">📷 Clique para adicionar a foto do animal</div>
+
+        <div class="form-grid">
+          <div class="field"><label>Nome</label><input placeholder="Ex: Mimi" /></div>
+          <div class="field"><label>Espécie</label>
+            <select id="select-especie"><option>Gato</option><option>Cachorro</option><option>Outro</option></select>
+          </div>
+          <div class="field"><label>Raça</label><input placeholder="Ex: SRD" /></div>
+          <div class="field"><label>Cor</label><input placeholder="Ex: Preto e branco" /></div>
+          <div class="field"><label>Data de nascimento estimada</label><input type="date" /></div>
+          <div class="field"><label>Data do resgate</label><input type="date" /></div>
+          <div class="field"><label>Local do resgate</label><input placeholder="Ex: Rua das Flores, 123" /></div>
+          <div class="field"><label>Pessoa que indicou</label><input placeholder="Nome de quem avisou" /></div>
+
+          <div class="field full"><label>Descrição / características</label><textarea rows="3" placeholder="Temperamento, particularidades..."></textarea></div>
+
+          <div class="field">
+            <label>Castrado</label>
+            <div class="toggle-row">
+              <div class="switch" id="switch-castrado"><div class="dot"></div></div>
+              <span class="badge orange" id="castrado-status">Não castrado</span>
+            </div>
+          </div>
+          <div class="field"><label>Previsão de castração (calculada)</label><input value="Calculada automaticamente" disabled /></div>
+        </div>
+
+        <!-- ==================================================================
+             DOENÇAS E DEFICIÊNCIAS — genérico (substitui o bloco fixo de FIV/FeLV)
+             O tipo de condição vem de um catálogo (tipos_condicao no banco),
+             e o status vem de outro catálogo (opcoes_status_condicao). Ambos
+             podem crescer pela tela, sem precisar mexer em código.
+             ================================================================== -->
+        <div class="field full">
+          <label>Doenças e deficiências</label>
+          <div id="lista-condicoes-form"></div>
+
+          <div class="add-condicao-row">
+            <div class="field">
+              <label>Tipo</label>
+              <select id="nova-condicao-tipo"></select>
+            </div>
+            <div class="field" id="campo-nova-condicao-status">
+              <label>Status</label>
+              <select id="nova-condicao-status"></select>
+            </div>
+            <button class="btn ghost small" id="btn-nova-condicao-tipo" type="button">+ Novo tipo</button>
+            <button class="btn ghost small" id="btn-nova-condicao-status-opcao" type="button">+ Nova opção de status</button>
+            <button class="btn small" id="btn-add-condicao" type="button">Adicionar</button>
+          </div>
+          <span class="dica-campo">Só aparecem aqui os tipos permitidos para a espécie selecionada acima (ex: FIV/FeLV somente para gatos).</span>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:6px;">
+          <button class="btn">Salvar cadastro</button>
+          <button class="btn ghost">Cancelar</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         PÁGINA 3 — CONTROLE CLÍNICO
+         ====================================================================== -->
+    <section class="page" id="page-clinico">
+      <div class="page-header">
+        <h1>Controle clínico</h1>
+        <p>Arraste os cartões conforme o tratamento avança</p>
+      </div>
+
+      <div class="filtros-bar">
+        <div class="filtro-item">
+          <label>Espécie</label>
+          <select id="filtro-clinico-especie">
+            <option value="todas">Todas</option>
+            <option value="Gato">Gato</option>
+            <option value="Cachorro">Cachorro</option>
+          </select>
+        </div>
+        <div class="filtro-item">
+          <label>Doença específica</label>
+          <select id="filtro-clinico-doenca"></select>
+        </div>
+        <div class="filtro-item">
+          <label>Deficiência</label>
+          <select id="filtro-clinico-deficiencia">
+            <option value="todas">Todos os animais</option>
+            <option value="com">Somente com deficiência</option>
+            <option value="sem">Somente sem deficiência</option>
+          </select>
+        </div>
+        <button class="btn ghost btn-limpar" id="limpar-filtros-clinico">Limpar filtros</button>
+      </div>
+
+      <div class="kanban" id="kanban-clinico"></div>
+    </section>
+
+    <!-- ======================================================================
+         PÁGINA 4 — ADOÇÕES
+         ====================================================================== -->
+    <section class="page" id="page-adocoes">
+      <div class="page-header">
+        <h1>Adoções</h1>
+        <p>Arraste os cartões entre as etapas, e use "Vincular pessoa" para ligar um adotante já cadastrado</p>
+      </div>
+
+      <div class="filtros-bar">
+        <div class="filtro-item">
+          <label>Espécie</label>
+          <select id="filtro-adocao-especie">
+            <option value="todas">Todas</option>
+            <option value="Gato">Gato</option>
+            <option value="Cachorro">Cachorro</option>
+          </select>
+        </div>
+        <div class="filtro-item">
+          <label>Doença específica</label>
+          <select id="filtro-adocao-doenca"></select>
+        </div>
+        <div class="filtro-item">
+          <label>Deficiência</label>
+          <select id="filtro-adocao-deficiencia">
+            <option value="todas">Todos os animais</option>
+            <option value="com">Somente com deficiência</option>
+            <option value="sem">Somente sem deficiência</option>
+          </select>
+        </div>
+        <button class="btn ghost btn-limpar" id="limpar-filtros-adocao">Limpar filtros</button>
+      </div>
+
+      <div class="kanban" id="kanban-adocoes"></div>
+    </section>
+
+    <!-- ======================================================================
+         PÁGINA 5 — PESSOAS (antes "Adotantes/Fornecedores")
+         Cadastro único, com cargos em formato de "pílulas" marcáveis.
+         ====================================================================== -->
+    <section class="page" id="page-pessoas">
+      <div class="page-header header-com-acao">
+        <div>
+          <h1>Pessoas</h1>
+          <p>Cadastro único — marque um ou mais cargos para cada pessoa</p>
+        </div>
+        <button class="btn" id="btn-nova-pessoa">Adicionar pessoa</button>
+      </div>
+
+      <div class="filtros-bar">
+        <div class="filtro-item">
+          <label>Filtrar por cargo</label>
+          <select id="filtro-pessoa-cargo">
+            <option value="todos">Todos</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="tabela-wrap">
+        <table id="tabela-pessoas">
+          <thead><tr><th>Nome</th><th>Cargos</th><th>Contato</th><th>Animais vinculados</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         PÁGINA 6 — PRODUTOS (sem estoque)
+         ====================================================================== -->
+    <section class="page" id="page-produtos">
+      <div class="page-header header-com-acao">
+        <div>
+          <h1>Produtos</h1>
+          <p>Catálogo de ração, medicamentos e demais itens (sem controle de estoque por enquanto)</p>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn ghost" id="btn-nova-categoria">Nova categoria</button>
+          <button class="btn" id="btn-novo-produto">Adicionar produto</button>
+        </div>
+      </div>
+
+      <div class="filtros-bar">
+        <div class="filtro-item">
+          <label>Categoria</label>
+          <select id="filtro-produto-categoria">
+            <option value="todas">Todas as categorias</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="tabela-wrap">
+        <table id="tabela-produtos">
+          <thead><tr><th>Produto</th><th>Categoria</th><th>Fornecedor</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==========================================================================
+       MODAL — NOVA PESSOA (substitui os modais separados de adotante/fornecedor)
+       ========================================================================== -->
+  <div class="modal-fundo" id="modal-pessoa">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Nova pessoa</h2>
+        <span class="modal-fechar" id="fechar-pessoa">✕</span>
+      </div>
+
+      <div class="form-grid">
+        <div class="field full"><label>Nome completo</label><input id="pe-nome" placeholder="Ex: Carla Souza" /></div>
+        <div class="field"><label>Telefone</label><input id="pe-telefone" placeholder="(51) 99999-0000" /></div>
+        <div class="field"><label>E-mail</label><input id="pe-email" type="email" placeholder="nome@email.com" /></div>
+        <div class="field full"><label>Endereço</label><input id="pe-endereco" placeholder="Rua, número, bairro, cidade" /></div>
+
+        <div class="field full">
+          <label>Cargo(s)</label>
+          <div class="checkbox-pills" id="pe-cargos"></div>
+          <span class="dica-campo">Pode marcar mais de um. O cadastro não pede nenhum animal — o vínculo é feito depois, na tela de Adoções.</span>
+        </div>
+
+        <!-- Só aparece quando o cargo "Fornecedor" está marcado -->
+        <div class="field full" id="bloco-produtos-fornecidos" style="display:none;">
+          <label>Produtos fornecidos</label>
+          <select id="pe-produtos" multiple size="4"></select>
+          <span class="dica-campo">Segure Ctrl (ou Cmd) para marcar mais de um.</span>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:6px;">
+        <button class="btn" id="salvar-pessoa">Salvar pessoa</button>
+        <button class="btn ghost" id="cancelar-pessoa">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL — VINCULAR PESSOA A UM ANIMAL (novo — fica dentro de Adoções)
+       Só aparece aqui a lista de pessoas já cadastradas com o cargo
+       "Adotante". É este modal que faz, na prática, o UPDATE de
+       adocoes.pessoa_id — sem exigir nada no cadastro da pessoa.
+       ========================================================================== -->
+  <div class="modal-fundo" id="modal-vincular">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Vincular pessoa ao animal</h2>
+        <span class="modal-fechar" id="fechar-vincular">✕</span>
+      </div>
+      <p style="margin-bottom:14px; font-size:13px;" id="vincular-animal-nome"></p>
+
+      <div class="field full">
+        <label>Pessoa (cargo Adotante)</label>
+        <select id="vi-pessoa"></select>
+      </div>
+      <div class="field full">
+        <div class="aviso-castracao" id="vi-aviso-castracao"></div>
+      </div>
+
+      <p style="margin:10px 0; font-size:12px;">Não encontrou a pessoa? <a href="#" id="vi-abrir-nova-pessoa" style="color:var(--cyan);">Cadastrar uma nova</a></p>
+
+      <div style="display:flex; gap:10px; margin-top:6px;">
+        <button class="btn" id="confirmar-vinculo">Vincular</button>
+        <button class="btn ghost" id="cancelar-vinculo">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL — NOVA CATEGORIA DE PRODUTO
+       ========================================================================== -->
+  <div class="modal-fundo" id="modal-categoria">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-header">
+        <h2>Nova categoria de produto</h2>
+        <span class="modal-fechar" id="fechar-categoria">✕</span>
+      </div>
+      <div class="field full"><label>Nome da categoria</label><input id="cat-nome" placeholder="Ex: Suplementos" /></div>
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="btn" id="salvar-categoria">Salvar categoria</button>
+        <button class="btn ghost" id="cancelar-categoria">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL — NOVO PRODUTO (sem campo de estoque)
+       ========================================================================== -->
+  <div class="modal-fundo" id="modal-produto">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Novo produto</h2>
+        <span class="modal-fechar" id="fechar-produto">✕</span>
+      </div>
+
+      <div class="upload-box" style="margin-bottom:18px;">📷 Clique para adicionar a foto do produto</div>
+
+      <div class="form-grid">
+        <div class="field full"><label>Nome do produto</label><input id="pr-nome" placeholder="Ex: Ração gato filhote 10kg" /></div>
+        <div class="field"><label>Categoria</label><select id="pr-categoria"></select></div>
+        <div class="field"><label>Fornecedor</label><select id="pr-fornecedor"></select></div>
+        <div class="field"><label>Cor</label><input id="pr-cor" placeholder="Opcional" /></div>
+        <div class="field"><label>Tamanho</label><input id="pr-tamanho" placeholder="Opcional" /></div>
+        <div class="field full"><label>Descrição</label><textarea id="pr-descricao" rows="2" placeholder="Para que serve, marca, observações..."></textarea></div>
+
+        <div class="field full" id="bloco-medicamento">
+          <label>Para qual doença / tratamento é usado</label>
+          <input id="pr-doenca" placeholder="Ex: Antipulgas e carrapatos" />
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:6px;">
+        <button class="btn" id="salvar-produto">Salvar produto</button>
+        <button class="btn ghost" id="cancelar-produto">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL — NOVO TIPO DE CONDIÇÃO (doença/lesão/deficiência)
+       ========================================================================== -->
+  <div class="modal-fundo" id="modal-tipo-condicao">
+    <div class="modal" style="max-width:440px;">
+      <div class="modal-header">
+        <h2>Novo tipo de condição</h2>
+        <span class="modal-fechar" id="fechar-tipo-condicao">✕</span>
+      </div>
+      <div class="field full"><label>Nome</label><input id="tc-nome" placeholder="Ex: Diabetes" /></div>
+      <div class="field full"><label>Categoria</label>
+        <select id="tc-categoria"><option value="doenca">Doença</option><option value="lesao">Lesão</option><option value="deficiencia">Deficiência</option></select>
+      </div>
+      <div class="field full"><label>Restrito a uma espécie?</label>
+        <select id="tc-especie"><option value="">Nenhuma — vale para qualquer espécie</option><option value="Gato">Gato</option><option value="Cachorro">Cachorro</option></select>
+      </div>
+      <div class="field full">
+        <div class="toggle-row"><div class="switch on" id="tc-usa-status"><div class="dot"></div></div><span style="font-size:13px;">Este tipo usa status (testado/negativo/positivo...)</span></div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="btn" id="salvar-tipo-condicao">Salvar tipo</button>
+        <button class="btn ghost" id="cancelar-tipo-condicao">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL — NOVA OPÇÃO DE STATUS
+       ========================================================================== -->
+  <div class="modal-fundo" id="modal-status-condicao">
+    <div class="modal" style="max-width:400px;">
+      <div class="modal-header">
+        <h2>Nova opção de status</h2>
+        <span class="modal-fechar" id="fechar-status-condicao">✕</span>
+      </div>
+      <div class="field full"><label>Nome da opção</label><input id="st-nome" placeholder="Ex: Em tratamento" /></div>
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="btn" id="salvar-status-condicao">Salvar opção</button>
+        <button class="btn ghost" id="cancelar-status-condicao">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ============================================================================
+   LÓGICA DO PROTÓTIPO
+   ============================================================================ */
+
+// ---- 1. Catálogos (refletem as tabelas "catálogo" do banco) ----------------
+let cargosDisponiveis = ["Adotante", "Fornecedor"];
+let categoriasProdutos = [
+  "Ração gato filhote", "Ração gato adulto", "Ração cachorro",
+  "Areia higiênica", "Caixa de transporte", "Caixa de areia",
+  "Medicamento", "Higiene", "Utensílio"
+];
+// Catálogo de tipos de condição — equivalente à tabela tipos_condicao.
+// especieRestricao: null = vale para qualquer espécie.
+let tiposCondicao = [
+  { nome:"FIV",  categoria:"doenca",      especieRestricao:"Gato", usaStatus:true },
+  { nome:"FeLV", categoria:"doenca",      especieRestricao:"Gato", usaStatus:true },
+  { nome:"Fratura",  categoria:"lesao",       especieRestricao:null, usaStatus:false },
+  { nome:"Cegueira", categoria:"deficiencia", especieRestricao:null, usaStatus:false },
+  { nome:"Paralisia",categoria:"deficiencia", especieRestricao:null, usaStatus:false },
+];
+// Catálogo de status — equivalente à tabela opcoes_status_condicao.
+let opcoesStatus = ["Não testado", "Negativo", "Positivo", "Inconclusivo"];
+
+// ---- 2. Pessoas (substitui os arrays separados de adotantes/fornecedores) --
+// Cada pessoa tem uma lista de cargos. Nenhuma pessoa referencia animal
+// diretamente — o vínculo mora em "animais[].adocaoPessoa".
+const pessoas = [
+  { id:"p1", nome:"Carla Souza", telefone:"(51) 99999-0001", email:"carla@email.com", cargos:["Adotante"] },
+  { id:"p2", nome:"João Pedro",  telefone:"(51) 99999-0002", email:"joao@email.com",  cargos:["Adotante"] },
+  { id:"p3", nome:"PetShop Amigo Fiel", telefone:"(51) 3333-1111", email:"contato@amigofiel.com", cargos:["Fornecedor"] },
+  { id:"p4", nome:"Clínica VetCare", telefone:"(51) 3333-2222", email:"contato@vetcare.com", cargos:["Fornecedor"] },
+];
+
+// ---- 3. Animais --------------------------------------------------------------
+// "condicoes" agora é uma lista de {tipo, status} em vez do antigo par fixo
+// fiv/felv. "adocaoPessoaId" é o vínculo criado a partir do modal "Vincular
+// pessoa" (fica null até alguém vincular).
+const animais = [
+  { nome:"Mimi", especie:"Gato", raca:"SRD", cor:"Preta", desc:"Dócil, gosta de colo. Recuperando de ferida leve.", castrado:false,
+    condicoes:[{tipo:'FIV', status:'Negativo'}, {tipo:'FeLV', status:'Negativo'}],
+    etapaClinica:"triagem", etapaAdocao:"aguardando_adocao", adocaoPessoaId:null },
+  { nome:"Thor", especie:"Cachorro", raca:"Vira-lata", cor:"Caramelo", desc:"Muito brincalhão, ótimo com crianças.", castrado:true,
+    condicoes:[], etapaClinica:"concluido", etapaAdocao:"em_processo_adocao", adocaoPessoaId:"p2" },
+  { nome:"Luna", especie:"Gato", raca:"Siamês", cor:"Branca e cinza", desc:"Tímida no início, mas carinhosa depois.", castrado:false,
+    condicoes:[{tipo:'FIV', status:'Positivo'}], etapaClinica:"em_tratamento", etapaAdocao:"em_tratamento_clinico", adocaoPessoaId:null },
+  { nome:"Bidu", especie:"Cachorro", raca:"Poodle", cor:"Branco", desc:"Idoso, calmo, precisa de cuidados especiais.", castrado:true,
+    condicoes:[{tipo:'Paralisia', status:null}], etapaClinica:"recuperacao", etapaAdocao:"aguardando_adocao", adocaoPessoaId:null },
+  { nome:"Nina", especie:"Gato", raca:"SRD", cor:"Rajada", desc:"Filhote saudável, muito ativa.", castrado:false,
+    condicoes:[{tipo:'FIV', status:'Não testado'}], etapaClinica:"concluido", etapaAdocao:"adotado", adocaoPessoaId:"p1" },
+  { nome:"Zeca", especie:"Cachorro", raca:"Vira-lata", cor:"Preto e branco", desc:"Resgatado com fratura na pata, em recuperação.", castrado:false,
+    condicoes:[{tipo:'Fratura', status:null}], etapaClinica:"em_tratamento", etapaAdocao:"em_tratamento_clinico", adocaoPessoaId:null },
+  { nome:"Pipoca", especie:"Gato", raca:"SRD", cor:"Laranja", desc:"Muito comunicativo, adora companhia.", castrado:true,
+    condicoes:[{tipo:'FIV', status:'Inconclusivo'}], etapaClinica:"recuperacao", etapaAdocao:"aguardando_adocao", adocaoPessoaId:null },
+  { nome:"Amora", especie:"Cachorro", raca:"SRD", cor:"Marrom", desc:"Anda com dificuldade, usa carrinho de apoio.", castrado:true,
+    condicoes:[{tipo:'Paralisia', status:null}], etapaClinica:"recuperacao", etapaAdocao:"em_tratamento_clinico", adocaoPessoaId:null },
+];
+
+const produtosExemplo = [
+  { nome:"Ração gato filhote", categoria:"Ração gato filhote", fornecedorId:"p3" },
+  { nome:"Areia higiênica", categoria:"Areia higiênica", fornecedorId:"p3" },
+  { nome:"Antipulga XPTO", categoria:"Medicamento", fornecedorId:"p4" },
+  { nome:"Caixa de transporte", categoria:"Caixa de transporte", fornecedorId:null },
+];
+
+const especieIcone = { "Gato":"🐱", "Cachorro":"🐶" };
+const especieCor   = { "Gato":"pink", "Cachorro":"cyan" };
+
+function pessoaPorId(id){ return pessoas.find(p => p.id === id); }
+function pessoasComCargo(cargo){ return pessoas.filter(p => p.cargos.includes(cargo)); }
+
+// ---- 4. Etiquetas (badges) ---------------------------------------------------
+function badgeCastrado(castrado){
+  return castrado ? '<span class="badge green">Castrado</span>' : '<span class="badge orange">Não castrado</span>';
+}
+const corStatus = { 'Negativo':'green', 'Positivo':'red', 'Inconclusivo':'yellow', 'Não testado':'purple' };
+const corCategoriaCondicao = { doenca:'red', lesao:'orange', deficiencia:'purple' };
+
+// Etiquetas de condições: doenças com status ganham cor pelo resultado do
+// teste; deficiências/lesões sem status ganham cor pela categoria.
+function badgesCondicoes(a){
+  return (a.condicoes || []).map(c => {
+    const def = tiposCondicao.find(t => t.nome === c.tipo);
+    const cor = (def && def.usaStatus && c.status) ? (corStatus[c.status] || 'purple') : (corCategoriaCondicao[def ? def.categoria : 'doenca']);
+    const texto = (def && def.usaStatus && c.status) ? `${c.tipo} ${c.status.toLowerCase()}` : c.tipo;
+    return `<span class="badge ${cor}">${texto}</span>`;
+  }).join('');
+}
+
+function temDeficiencia(a){
+  return (a.condicoes || []).some(c => {
+    const def = tiposCondicao.find(t => t.nome === c.tipo);
+    return def && def.categoria === 'deficiencia';
+  });
+}
+
+// ---- 5. Painel geral -----------------------------------------------------------
+function montarDashboard(){
+  const box = document.getElementById('dashboard-animals');
+  box.innerHTML = animais.filter(a => a.etapaAdocao === 'aguardando_adocao').map(a => cartaoAnimal(a)).join('');
+}
+
+function cartaoAnimal(a){
+  return `
+    <div class="animal-card">
+      <div class="top-row">
+        <div class="avatar">${especieIcone[a.especie] || '🐾'}</div>
+        <span class="badge ${especieCor[a.especie] || 'purple'}">${a.especie}</span>
+      </div>
+      <h3>${a.nome}</h3>
+      <p class="desc">${a.desc}</p>
+      <div class="badge-row">
+        <span class="badge purple">${a.raca}</span>
+        ${badgeCastrado(a.castrado)}
+        ${badgesCondicoes(a)}
+      </div>
+    </div>`;
+}
+
+// ---- 6. Kanban genérico (controle clínico e adoções) ---------------------------
+const filtrosPorKanban = {};
+
+function animalPassaNoFiltro(a, filtros){
+  if(!filtros) return true;
+  if(filtros.especie && filtros.especie !== 'todas' && a.especie !== filtros.especie) return false;
+  if(filtros.doenca && filtros.doenca !== 'todas' && !(a.condicoes||[]).some(c => c.tipo === filtros.doenca)) return false;
+  if(filtros.deficiencia === 'com' && !temDeficiencia(a)) return false;
+  if(filtros.deficiencia === 'sem' && temDeficiencia(a)) return false;
+  return true;
+}
+
+function montarKanban(containerId, colunas, campo){
+  const container = document.getElementById(containerId);
+  container.innerHTML = colunas.map(col => `
+    <div class="kanban-col" data-col="${col.chave}">
+      <div class="kanban-col-header"><h3>${col.titulo}</h3><span class="count-pill" id="${containerId}-count-${col.chave}">0</span></div>
+      <div class="kanban-cards" id="${containerId}-cards-${col.chave}"></div>
+    </div>
+  `).join('');
+
+  colunas.forEach(col => {
+    const colEl = document.querySelector(`#${containerId} .kanban-col[data-col="${col.chave}"]`);
+    colEl.addEventListener('dragover', e => { e.preventDefault(); colEl.classList.add('drag-over'); });
+    colEl.addEventListener('dragleave', () => colEl.classList.remove('drag-over'));
+    colEl.addEventListener('drop', e => {
+      e.preventDefault(); colEl.classList.remove('drag-over');
+      const nomeAnimal = e.dataTransfer.getData('text/plain');
+      const animal = animais.find(a => a.nome === nomeAnimal);
+      if(animal){ animal[campo] = col.chave; renderKanban(containerId, colunas, campo); }
+    });
+  });
+  renderKanban(containerId, colunas, campo);
+}
+
+function renderKanban(containerId, colunas, campo){
+  const filtros = filtrosPorKanban[containerId];
+  colunas.forEach(col => {
+    const lista = animais.filter(a => a[campo] === col.chave && animalPassaNoFiltro(a, filtros));
+    document.getElementById(`${containerId}-count-${col.chave}`).textContent = lista.length;
+    document.getElementById(`${containerId}-cards-${col.chave}`).innerHTML = lista.map(a => {
+      const pessoaVinculada = a.adocaoPessoaId ? pessoaPorId(a.adocaoPessoaId) : null;
+      // O botão "Vincular pessoa" só faz sentido no kanban de adoções
+      const mostrarVincular = containerId === 'kanban-adocoes';
+      return `
+      <div class="animal-card kanban-card" draggable="true" ondragstart="event.dataTransfer.setData('text/plain', '${a.nome}')">
+        <div class="top-row">
+          <div class="avatar">${especieIcone[a.especie] || '🐾'}</div>
+          <span class="badge ${especieCor[a.especie] || 'purple'}">${a.especie}</span>
+        </div>
+        <h3>${a.nome}</h3>
+        <p class="desc">${a.desc.slice(0,60)}${a.desc.length>60?'…':''}</p>
+        <div class="badge-row">
+          ${badgeCastrado(a.castrado)}
+          ${badgesCondicoes(a)}
+          ${pessoaVinculada ? `<span class="badge cyan">${pessoaVinculada.nome}</span>` : ''}
+        </div>
+        ${mostrarVincular ? `<button class="link-pessoa-btn" onclick="abrirModalVincular('${a.nome}')">${pessoaVinculada ? 'Trocar pessoa vinculada' : '+ Vincular pessoa'}</button>` : ''}
+      </div>`;
+    }).join('') || '<p style="font-size:12.5px; padding:8px 2px; color:var(--text-muted);">Nenhum animal com esse filtro.</p>';
+  });
+}
+
+function nomesDoencasDistintas(){
+  const nomes = new Set();
+  animais.forEach(a => (a.condicoes||[]).forEach(c => nomes.add(c.tipo)));
+  return Array.from(nomes).sort();
+}
+
+function configurarFiltrosKanban(containerId, chave, colunas, campo){
+  const selEspecie = document.getElementById(`filtro-${chave}-especie`);
+  const selDoenca = document.getElementById(`filtro-${chave}-doenca`);
+  const selDeficiencia = document.getElementById(`filtro-${chave}-deficiencia`);
+  const btnLimpar = document.getElementById(`limpar-filtros-${chave}`);
+
+  selDoenca.innerHTML = '<option value="todas">Todas</option>' + nomesDoencasDistintas().map(n => `<option value="${n}">${n}</option>`).join('');
+  filtrosPorKanban[containerId] = { especie:'todas', doenca:'todas', deficiencia:'todas' };
+
+  function aplicar(){
+    filtrosPorKanban[containerId] = { especie:selEspecie.value, doenca:selDoenca.value, deficiencia:selDeficiencia.value };
+    renderKanban(containerId, colunas, campo);
+  }
+  [selEspecie, selDoenca, selDeficiencia].forEach(sel => sel.addEventListener('change', aplicar));
+  btnLimpar.addEventListener('click', () => { selEspecie.value='todas'; selDoenca.value='todas'; selDeficiencia.value='todas'; aplicar(); });
+}
+
+const colunasClinico = [
+  { chave:'triagem', titulo:'Triagem' }, { chave:'em_tratamento', titulo:'Em tratamento' },
+  { chave:'recuperacao', titulo:'Recuperação' }, { chave:'concluido', titulo:'Concluído' },
+];
+const colunasAdocao = [
+  { chave:'aguardando_adocao', titulo:'Aguardando adoção' }, { chave:'em_tratamento_clinico', titulo:'Em tratamento clínico' },
+  { chave:'em_processo_adocao', titulo:'Em processo de adoção' }, { chave:'adotado', titulo:'Adotado' },
+];
+
+// ---- 7. Modal "Vincular pessoa" (novo — cria o vínculo animal<->pessoa) --------
+// Este é o único lugar do protótipo onde um animal é ligado a uma pessoa.
+// O cadastro da pessoa (mais abaixo) nunca pede animal nenhum.
+const modalVincular = document.getElementById('modal-vincular');
+let animalEmVinculo = null;
+
+function preencherPessoasAdotantes(){
+  const sel = document.getElementById('vi-pessoa');
+  const lista = pessoasComCargo('Adotante');
+  sel.innerHTML = '<option value="">— Selecione a pessoa —</option>' + lista.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+}
+
+function atualizarAvisoVinculo(){
+  const pessoaId = document.getElementById('vi-pessoa').value;
+  const aviso = document.getElementById('vi-aviso-castracao');
+  const animal = animais.find(a => a.nome === animalEmVinculo);
+  if(!pessoaId || !animal){ aviso.className='aviso-castracao'; aviso.textContent=''; return; }
+  if(animal.castrado){
+    aviso.className = 'aviso-castracao ok';
+    aviso.textContent = `${animal.nome} já está castrado — nenhum lembrete será criado.`;
+  } else {
+    aviso.className = 'aviso-castracao pendente';
+    aviso.textContent = `${animal.nome} ainda não está castrado. Será criado um lembrete com notificação 5 dias antes da data prevista, e a castração só poderá ser marcada como realizada após confirmação da pessoa vinculada.`;
+  }
+}
+document.getElementById('vi-pessoa').addEventListener('change', atualizarAvisoVinculo);
+
+function abrirModalVincular(nomeAnimal){
+  animalEmVinculo = nomeAnimal;
+  document.getElementById('vincular-animal-nome').textContent = `Animal: ${nomeAnimal}`;
+  preencherPessoasAdotantes();
+  document.getElementById('vi-pessoa').value = '';
+  atualizarAvisoVinculo();
+  modalVincular.classList.add('aberto');
+}
+function fecharModalVincular(){ modalVincular.classList.remove('aberto'); animalEmVinculo = null; }
+
+document.getElementById('fechar-vincular').addEventListener('click', fecharModalVincular);
+document.getElementById('cancelar-vinculo').addEventListener('click', fecharModalVincular);
+modalVincular.addEventListener('click', e => { if(e.target === modalVincular) fecharModalVincular(); });
+
+document.getElementById('confirmar-vinculo').addEventListener('click', () => {
+  const pessoaId = document.getElementById('vi-pessoa').value;
+  if(!pessoaId) return;
+  const animal = animais.find(a => a.nome === animalEmVinculo);
+  if(animal){
+    animal.adocaoPessoaId = pessoaId;
+    if(animal.etapaAdocao === 'aguardando_adocao' || animal.etapaAdocao === 'em_tratamento_clinico'){
+      animal.etapaAdocao = 'em_processo_adocao';
+    }
+    renderKanban('kanban-adocoes', colunasAdocao, 'etapaAdocao');
+    montarDashboard();
+    montarTabelaPessoas();
+  }
+  fecharModalVincular();
+});
+
+document.getElementById('vi-abrir-nova-pessoa').addEventListener('click', (e) => {
+  e.preventDefault();
+  fecharModalVincular();
+  abrirModalPessoa();
+});
+
+// ---- 8. Cadastro de pessoa (único — substitui adotante/fornecedor) -------------
+const modalPessoa = document.getElementById('modal-pessoa');
+const blocoProdutosFornecidos = document.getElementById('bloco-produtos-fornecidos');
+
+function montarCargosCheckbox(){
+  const box = document.getElementById('pe-cargos');
+  box.innerHTML = cargosDisponiveis.map(c => `
+    <label class="checkbox-pill"><input type="checkbox" value="${c}" class="pe-cargo-check"> ${c}</label>
+  `).join('');
+  box.querySelectorAll('.pe-cargo-check').forEach(chk => {
+    chk.addEventListener('change', () => {
+      chk.closest('.checkbox-pill').classList.toggle('marcado', chk.checked);
+      atualizarBlocoFornecedor();
+    });
+  });
+}
+
+function atualizarBlocoFornecedor(){
+  const marcados = Array.from(document.querySelectorAll('.pe-cargo-check:checked')).map(c => c.value);
+  blocoProdutosFornecidos.style.display = marcados.includes('Fornecedor') ? 'flex' : 'none';
+  if(marcados.includes('Fornecedor')){
+    document.getElementById('pe-produtos').innerHTML = produtosExemplo.map(p => `<option value="${p.nome}">${p.nome}</option>`).join('');
+  }
+}
+
+function abrirModalPessoa(){
+  montarCargosCheckbox();
+  atualizarBlocoFornecedor();
+  modalPessoa.classList.add('aberto');
+}
+function fecharModalPessoa(){
+  modalPessoa.classList.remove('aberto');
+  ['pe-nome','pe-telefone','pe-email','pe-endereco'].forEach(id => document.getElementById(id).value = '');
+}
+
+document.getElementById('btn-nova-pessoa').addEventListener('click', abrirModalPessoa);
+document.getElementById('fechar-pessoa').addEventListener('click', fecharModalPessoa);
+document.getElementById('cancelar-pessoa').addEventListener('click', fecharModalPessoa);
+modalPessoa.addEventListener('click', e => { if(e.target === modalPessoa) fecharModalPessoa(); });
+
+document.getElementById('salvar-pessoa').addEventListener('click', () => {
+  const nome = document.getElementById('pe-nome').value.trim();
+  if(!nome){ document.getElementById('pe-nome').focus(); return; }
+  const cargosMarcados = Array.from(document.querySelectorAll('.pe-cargo-check:checked')).map(c => c.value);
+
+  pessoas.push({
+    id: 'p' + (pessoas.length + 1),
+    nome,
+    telefone: document.getElementById('pe-telefone').value.trim() || '—',
+    email: document.getElementById('pe-email').value.trim() || '—',
+    cargos: cargosMarcados
+  });
+
+  montarTabelaPessoas();
+  atualizarFiltroCargoPessoas();
+  fecharModalPessoa();
+});
+
+// ---- 9. Tabela de pessoas ------------------------------------------------------
+function animaisVinculadosTexto(pessoaId){
+  const vinculados = animais.filter(a => a.adocaoPessoaId === pessoaId);
+  return vinculados.length ? vinculados.map(a => a.nome).join(', ') : '—';
+}
+
+function corCargo(c){ return c === 'Adotante' ? 'pink' : (c === 'Fornecedor' ? 'orange' : 'purple'); }
+
+function montarTabelaPessoas(){
+  const filtro = document.getElementById('filtro-pessoa-cargo').value;
+  const lista = filtro === 'todos' ? pessoas : pessoas.filter(p => p.cargos.includes(filtro));
+  document.querySelector('#tabela-pessoas tbody').innerHTML = lista.length ? lista.map(p => `
+    <tr>
+      <td>${p.nome}</td>
+      <td>${p.cargos.map(c => `<span class="badge ${corCargo(c)}">${c}</span>`).join(' ') || '<span class="badge purple">Sem cargo</span>'}</td>
+      <td>${p.telefone}</td>
+      <td>${animaisVinculadosTexto(p.id)}</td>
+    </tr>`).join('') : '<tr><td colspan="4" style="color:var(--text-muted);">Nenhuma pessoa com esse cargo.</td></tr>';
+}
+
+function atualizarFiltroCargoPessoas(){
+  const sel = document.getElementById('filtro-pessoa-cargo');
+  const atual = sel.value;
+  sel.innerHTML = '<option value="todos">Todos</option>' + cargosDisponiveis.map(c => `<option value="${c}">${c}</option>`).join('');
+  sel.value = cargosDisponiveis.includes(atual) ? atual : 'todos';
+}
+document.getElementById('filtro-pessoa-cargo').addEventListener('change', montarTabelaPessoas);
+
+// ---- 10. Produtos (sem estoque) -------------------------------------------------
+function montarTabelas(){
+  const categoriaFiltrada = document.getElementById('filtro-produto-categoria').value;
+  const produtosFiltrados = categoriaFiltrada === 'todas' ? produtosExemplo : produtosExemplo.filter(p => p.categoria === categoriaFiltrada);
+
+  document.querySelector('#tabela-produtos tbody').innerHTML = produtosFiltrados.length ? produtosFiltrados.map(x => {
+    const fornecedor = x.fornecedorId ? pessoaPorId(x.fornecedorId) : null;
+    return `<tr><td>${x.nome}</td><td><span class="badge cyan">${x.categoria}</span></td><td>${fornecedor ? fornecedor.nome : '—'}</td></tr>`;
+  }).join('') : '<tr><td colspan="3" style="color:var(--text-muted);">Nenhum produto nesta categoria.</td></tr>';
+}
+
+function atualizarSelectsCategoria(){
+  const filtro = document.getElementById('filtro-produto-categoria');
+  const valorAtual = filtro.value;
+  filtro.innerHTML = '<option value="todas">Todas as categorias</option>' + categoriasProdutos.map(c => `<option value="${c}">${c}</option>`).join('');
+  filtro.value = categoriasProdutos.includes(valorAtual) ? valorAtual : 'todas';
+  document.getElementById('pr-categoria').innerHTML = categoriasProdutos.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+document.getElementById('filtro-produto-categoria').addEventListener('change', montarTabelas);
+
+// -- Nova categoria --
+const modalCategoria = document.getElementById('modal-categoria');
+function abrirModalCategoria(){ modalCategoria.classList.add('aberto'); }
+function fecharModalCategoria(){ modalCategoria.classList.remove('aberto'); document.getElementById('cat-nome').value=''; }
+document.getElementById('btn-nova-categoria').addEventListener('click', abrirModalCategoria);
+document.getElementById('fechar-categoria').addEventListener('click', fecharModalCategoria);
+document.getElementById('cancelar-categoria').addEventListener('click', fecharModalCategoria);
+modalCategoria.addEventListener('click', e => { if(e.target === modalCategoria) fecharModalCategoria(); });
+document.getElementById('salvar-categoria').addEventListener('click', () => {
+  const nome = document.getElementById('cat-nome').value.trim();
+  if(!nome){ document.getElementById('cat-nome').focus(); return; }
+  if(!categoriasProdutos.includes(nome)) categoriasProdutos.push(nome);
+  atualizarSelectsCategoria();
+  fecharModalCategoria();
+});
+
+// -- Novo produto --
+const modalProduto = document.getElementById('modal-produto');
+function preencherFornecedoresDisponiveis(){
+  document.getElementById('pr-fornecedor').innerHTML = '<option value="">— Nenhum / definir depois —</option>' +
+    pessoasComCargo('Fornecedor').map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+}
+function abrirModalProduto(){ preencherFornecedoresDisponiveis(); modalProduto.classList.add('aberto'); }
+function fecharModalProduto(){
+  modalProduto.classList.remove('aberto');
+  ['pr-nome','pr-cor','pr-tamanho','pr-descricao','pr-doenca'].forEach(id => document.getElementById(id).value = '');
+}
+document.getElementById('btn-novo-produto').addEventListener('click', abrirModalProduto);
+document.getElementById('fechar-produto').addEventListener('click', fecharModalProduto);
+document.getElementById('cancelar-produto').addEventListener('click', fecharModalProduto);
+modalProduto.addEventListener('click', e => { if(e.target === modalProduto) fecharModalProduto(); });
+document.getElementById('salvar-produto').addEventListener('click', () => {
+  const nome = document.getElementById('pr-nome').value.trim();
+  if(!nome){ document.getElementById('pr-nome').focus(); return; }
+  produtosExemplo.push({ nome, categoria: document.getElementById('pr-categoria').value, fornecedorId: document.getElementById('pr-fornecedor').value || null });
+  montarTabelas();
+  fecharModalProduto();
+});
+
+// ---- 11. Doenças e deficiências no formulário de cadastro de animal -----------
+let condicoesDoFormulario = [];
+
+function tiposCondicaoParaEspecie(especie){
+  return tiposCondicao.filter(t => !t.especieRestricao || t.especieRestricao === especie);
+}
+
+function preencherSelectsCondicao(){
+  const especie = document.getElementById('select-especie').value;
+  const selTipo = document.getElementById('nova-condicao-tipo');
+  selTipo.innerHTML = tiposCondicaoParaEspecie(especie).map(t => `<option value="${t.nome}">${t.nome}</option>`).join('');
+  atualizarCampoStatusCondicao();
+}
+function atualizarCampoStatusCondicao(){
+  const tipoNome = document.getElementById('nova-condicao-tipo').value;
+  const def = tiposCondicao.find(t => t.nome === tipoNome);
+  document.getElementById('campo-nova-condicao-status').style.display = (def && def.usaStatus) ? 'flex' : 'none';
+  document.getElementById('nova-condicao-status').innerHTML = opcoesStatus.map(o => `<option value="${o}">${o}</option>`).join('');
+}
+document.getElementById('select-especie').addEventListener('change', preencherSelectsCondicao);
+document.getElementById('nova-condicao-tipo').addEventListener('change', atualizarCampoStatusCondicao);
+
+function renderListaCondicoesForm(){
+  document.getElementById('lista-condicoes-form').innerHTML = condicoesDoFormulario.map((c, i) => `
+    <div class="condicao-item">
+      <span>${c.tipo}${c.status ? ' — ' + c.status : ''}</span>
+      <span class="remover" onclick="removerCondicaoForm(${i})">✕</span>
+    </div>`).join('');
+}
+function removerCondicaoForm(i){ condicoesDoFormulario.splice(i,1); renderListaCondicoesForm(); }
+
+document.getElementById('btn-add-condicao').addEventListener('click', () => {
+  const tipoNome = document.getElementById('nova-condicao-tipo').value;
+  const def = tiposCondicao.find(t => t.nome === tipoNome);
+  if(!tipoNome) return;
+  condicoesDoFormulario.push({ tipo: tipoNome, status: (def && def.usaStatus) ? document.getElementById('nova-condicao-status').value : null });
+  renderListaCondicoesForm();
+});
+
+// -- Novo tipo de condição (catálogo extensível) --
+const modalTipoCondicao = document.getElementById('modal-tipo-condicao');
+document.getElementById('btn-nova-condicao-tipo').addEventListener('click', () => modalTipoCondicao.classList.add('aberto'));
+document.getElementById('fechar-tipo-condicao').addEventListener('click', () => modalTipoCondicao.classList.remove('aberto'));
+document.getElementById('cancelar-tipo-condicao').addEventListener('click', () => modalTipoCondicao.classList.remove('aberto'));
+modalTipoCondicao.addEventListener('click', e => { if(e.target === modalTipoCondicao) modalTipoCondicao.classList.remove('aberto'); });
+document.getElementById('tc-usa-status').addEventListener('click', function(){ this.classList.toggle('on'); });
+document.getElementById('salvar-tipo-condicao').addEventListener('click', () => {
+  const nome = document.getElementById('tc-nome').value.trim();
+  if(!nome) { document.getElementById('tc-nome').focus(); return; }
+  tiposCondicao.push({
+    nome,
+    categoria: document.getElementById('tc-categoria').value,
+    especieRestricao: document.getElementById('tc-especie').value || null,
+    usaStatus: document.getElementById('tc-usa-status').classList.contains('on')
+  });
+  document.getElementById('tc-nome').value = '';
+  preencherSelectsCondicao();
+  modalTipoCondicao.classList.remove('aberto');
+});
+
+// -- Nova opção de status (catálogo extensível) --
+const modalStatusCondicao = document.getElementById('modal-status-condicao');
+document.getElementById('btn-nova-condicao-status-opcao').addEventListener('click', () => modalStatusCondicao.classList.add('aberto'));
+document.getElementById('fechar-status-condicao').addEventListener('click', () => modalStatusCondicao.classList.remove('aberto'));
+document.getElementById('cancelar-status-condicao').addEventListener('click', () => modalStatusCondicao.classList.remove('aberto'));
+modalStatusCondicao.addEventListener('click', e => { if(e.target === modalStatusCondicao) modalStatusCondicao.classList.remove('aberto'); });
+document.getElementById('salvar-status-condicao').addEventListener('click', () => {
+  const nome = document.getElementById('st-nome').value.trim();
+  if(!nome) { document.getElementById('st-nome').focus(); return; }
+  if(!opcoesStatus.includes(nome)) opcoesStatus.push(nome);
+  document.getElementById('st-nome').value = '';
+  atualizarCampoStatusCondicao();
+  modalStatusCondicao.classList.remove('aberto');
+});
+
+// ---- 12. Toggle "castrado" -----------------------------------------------------
+const switchCastrado = document.getElementById('switch-castrado');
+switchCastrado.addEventListener('click', () => {
+  switchCastrado.classList.toggle('on');
+  const ligado = switchCastrado.classList.contains('on');
+  document.getElementById('castrado-status').outerHTML =
+    `<span class="badge ${ligado ? 'green' : 'orange'}" id="castrado-status">${ligado ? 'Castrado' : 'Não castrado'}</span>`;
+});
+
+// ---- 13. Navegação entre páginas + menu mobile ----------------------------------
+const sidebar = document.getElementById('sidebar');
+const overlayMobile = document.getElementById('overlay-mobile');
+function fecharMenuMobile(){ sidebar.classList.remove('aberta'); overlayMobile.classList.remove('ativo'); }
+document.getElementById('btn-menu-mobile').addEventListener('click', () => {
+  sidebar.classList.toggle('aberta'); overlayMobile.classList.toggle('ativo');
+});
+overlayMobile.addEventListener('click', fecharMenuMobile);
+
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById('page-' + item.dataset.page).classList.add('active');
+    fecharMenuMobile();
+  });
+});
+
+// ---- 14. Inicialização -----------------------------------------------------------
+montarDashboard();
+montarKanban('kanban-clinico', colunasClinico, 'etapaClinica');
+montarKanban('kanban-adocoes', colunasAdocao, 'etapaAdocao');
+configurarFiltrosKanban('kanban-clinico', 'clinico', colunasClinico, 'etapaClinica');
+configurarFiltrosKanban('kanban-adocoes', 'adocao', colunasAdocao, 'etapaAdocao');
+atualizarSelectsCategoria();
+montarTabelas();
+atualizarFiltroCargoPessoas();
+montarTabelaPessoas();
+preencherSelectsCondicao();
+renderListaCondicoesForm();
+</script>
+</body>
+</html>
