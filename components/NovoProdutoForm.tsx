@@ -1,4 +1,4 @@
-// Local no projeto: components/NovoProdutoForm.tsx (arquivo novo)
+// Local no projeto: components/NovoProdutoForm.tsx (SUBSTITUA o arquivo existente)
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'

@@ -1,6 +1,6 @@
-// Local no projeto: components/KanbanAdocoes.tsx (arquivo novo)
+// Local no projeto: components/KanbanAdocoes.tsx (SUBSTITUA o arquivo existente)
 'use client'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import ModalVincularPessoa from './ModalVincularPessoa'
@@ -9,7 +9,7 @@ type Adocao = {
   id: string
   etapa: string
   pessoa_id: string | null
-  animais: { id: string; nome: string; especie: string; raca: string | null; descricao: string | null; castrado: boolean; data_nascimento_estimada: string | null } | null
+  animais: { id: string; nome: string; especie: string; raca: string | null; descricao: string | null; castrado: boolean; data_nascimento_estimada: string | null; data_castracao_prevista: string | null } | null
   pessoas: { id: string; nome: string } | null
 }
 type Pessoa = { id: string; nome: string; cargos: string }
@@ -28,13 +28,21 @@ export default function KanbanAdocoes({ adocoes, pessoasAdotantes }: { adocoes: 
   const supabase = createClient()
   const [modalAberto, setModalAberto] = useState<Adocao | null>(null)
 
+  const [erro, setErro] = useState<string | null>(null)
+  const arrastando = useRef<string | null>(null)
+
   async function moverPara(adocaoId: string, novaEtapa: string) {
-    await supabase.from('adocoes').update({ etapa: novaEtapa }).eq('id', adocaoId)
+    if (!adocaoId) return
+    const { data, error } = await supabase.from('adocoes').update({ etapa: novaEtapa }).eq('id', adocaoId).select('id')
+    if (error) setErro(error.message)
+    else if (!data || data.length === 0) setErro('O banco não gravou a mudança (falta permissão de UPDATE em adocoes).')
+    else setErro(null)
     router.refresh()
   }
 
   return (
     <>
+      {erro && <p className="erro-form" style={{ marginBottom: 12 }}>{erro}</p>}
       <div className="kanban">
         {colunas.map((col) => {
           const lista = adocoes.filter((ad) => ad.etapa === col.chave)
@@ -42,12 +50,13 @@ export default function KanbanAdocoes({ adocoes, pessoasAdotantes }: { adocoes: 
             <div
               className="kanban-col"
               key={col.chave}
-              onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over') }}
+              onDragEnter={(e) => e.preventDefault()}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add('drag-over') }}
               onDragLeave={(e) => e.currentTarget.classList.remove('drag-over')}
               onDrop={(e) => {
                 e.preventDefault()
                 e.currentTarget.classList.remove('drag-over')
-                const id = e.dataTransfer.getData('text/plain')
+                const id = e.dataTransfer.getData('text/plain') || arrastando.current || ''
                 moverPara(id, col.chave)
               }}
             >
@@ -63,7 +72,8 @@ export default function KanbanAdocoes({ adocoes, pessoasAdotantes }: { adocoes: 
                     className="animal-card kanban-card"
                     key={ad.id}
                     draggable
-                    onDragStart={(e) => e.dataTransfer.setData('text/plain', ad.id)}
+                    onDragStart={(e) => { arrastando.current = ad.id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ad.id) }}
+                    onDragEnd={() => { arrastando.current = null }}
                   >
                     <div className="top-row">
                       <div className="avatar">{especieIcone[a.especie] || '🐾'}</div>
@@ -74,8 +84,11 @@ export default function KanbanAdocoes({ adocoes, pessoasAdotantes }: { adocoes: 
                     {ad.pessoas && (
                       <div className="badge-row"><span className="badge cyan">{ad.pessoas.nome}</span></div>
                     )}
-                    <button className="link-pessoa-btn" onClick={() => setModalAberto(ad)}>
-                      {ad.pessoas ? 'Trocar pessoa vinculada' : '+ Vincular pessoa'}
+                    <select className="mover-select" value={ad.etapa} onChange={(e) => moverPara(ad.id, e.target.value)} aria-label="Mover para">
+                      {colunas.map((c) => <option key={c.chave} value={c.chave}>{c.titulo}</option>)}
+                    </select>
+                    <button type="button" className="link-pessoa-btn" draggable={false} onClick={() => setModalAberto(ad)}>
+                      {ad.pessoas ? 'Trocar adotante' : '+ Vincular adotante'}
                     </button>
                   </div>
                 )

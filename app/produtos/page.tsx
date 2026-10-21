@@ -1,4 +1,4 @@
-// Local no projeto: app/produtos/page.tsx (arquivo novo)
+// Local no projeto: app/produtos/page.tsx (SUBSTITUA o arquivo existente)
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/server'
 import NovoProdutoForm from '@/components/NovoProdutoForm'
@@ -23,7 +23,7 @@ export default async function ProdutosPage() {
       <div className="page-header header-com-acao">
         <div>
           <h1>Produtos</h1>
-          <p>Catálogo de ração, medicamentos e demais itens (sem controle de estoque por enquanto)</p>
+          <p>Catálogo de ração, medicamentos e demais itens</p>
         </div>
         <Link href="/categorias" className="btn ghost small">Gerenciar categorias</Link>
       </div>

@@ -1,7 +1,8 @@
-// Local no projeto: components/KanbanClinico.tsx (arquivo novo)
+// Local no projeto: components/KanbanClinico.tsx (SUBSTITUA o arquivo existente)
 // Kanban arrastável: ao soltar um cartão em outra coluna, atualiza
 // tratamentos.etapa no Supabase na hora (sem precisar salvar depois).
 'use client'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 
@@ -24,12 +25,21 @@ export default function KanbanClinico({ tratamentos }: { tratamentos: Tratamento
   const router = useRouter()
   const supabase = createClient()
 
+  const [erro, setErro] = useState<string | null>(null)
+  const arrastando = useRef<string | null>(null)
+
   async function moverPara(tratamentoId: string, novaEtapa: string) {
-    await supabase.from('tratamentos').update({ etapa: novaEtapa }).eq('id', tratamentoId)
+    if (!tratamentoId) return
+    const { data, error } = await supabase.from('tratamentos').update({ etapa: novaEtapa }).eq('id', tratamentoId).select('id')
+    if (error) setErro(error.message)
+    else if (!data || data.length === 0) setErro('O banco não gravou a mudança (falta permissão de UPDATE em tratamentos).')
+    else setErro(null)
     router.refresh()
   }
 
   return (
+    <>
+    {erro && <p className="erro-form" style={{ marginBottom: 12 }}>{erro}</p>}
     <div className="kanban">
       {colunas.map((col) => {
         const lista = tratamentos.filter((t) => t.etapa === col.chave)
@@ -37,12 +47,13 @@ export default function KanbanClinico({ tratamentos }: { tratamentos: Tratamento
           <div
             className="kanban-col"
             key={col.chave}
-            onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over') }}
+            onDragEnter={(e) => e.preventDefault()}
+            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add('drag-over') }}
             onDragLeave={(e) => e.currentTarget.classList.remove('drag-over')}
             onDrop={(e) => {
               e.preventDefault()
               e.currentTarget.classList.remove('drag-over')
-              const id = e.dataTransfer.getData('text/plain')
+              const id = e.dataTransfer.getData('text/plain') || arrastando.current || ''
               moverPara(id, col.chave)
             }}
           >
@@ -58,7 +69,8 @@ export default function KanbanClinico({ tratamentos }: { tratamentos: Tratamento
                   className="animal-card kanban-card"
                   key={t.id}
                   draggable
-                  onDragStart={(e) => e.dataTransfer.setData('text/plain', t.id)}
+                  onDragStart={(e) => { arrastando.current = t.id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', t.id) }}
+                  onDragEnd={() => { arrastando.current = null }}
                 >
                   <div className="top-row">
                     <div className="avatar">{especieIcone[a.especie] || '🐾'}</div>
@@ -66,6 +78,9 @@ export default function KanbanClinico({ tratamentos }: { tratamentos: Tratamento
                   </div>
                   <h3>{a.nome}</h3>
                   <p className="desc">{a.descricao?.slice(0, 60)}</p>
+                  <select className="mover-select" value={t.etapa} onChange={(e) => moverPara(t.id, e.target.value)} aria-label="Mover para">
+                    {colunas.map((c) => <option key={c.chave} value={c.chave}>{c.titulo}</option>)}
+                  </select>
                 </div>
               )
             })}
@@ -73,5 +88,6 @@ export default function KanbanClinico({ tratamentos }: { tratamentos: Tratamento
         )
       })}
     </div>
+    </>
   )
 }
